@@ -34,14 +34,31 @@ class Link extends React.Component {
 	}
 
 	render() {
-		const { to, ...props } = this.props
-		return (
-			<a className='router-link'
-			    {...props}
-				onClick={event => this.handleClick(event)}
-				href={to}
-			/>
-		)
+		const { to, active, ...props } = this.props
+        if (active) {
+            return (
+                <a className='router-link active'
+                    onClick={event => this.handleClick(event)}
+                    href={to}
+                    {...props}
+                >
+                    {props.children}
+                </a>
+            )
+        } else {
+            return(
+                <div className='router-link inactive' style={{display:'inline'}}>
+                    {props.children}
+                </div>
+            )
+        }
 	}
 }
-export { Link };
+Link.propTypes = {
+    to: PropTypes.string.isRequired,
+    active:PropTypes.bool,
+}
+Link.defaultProps = {
+    active: true
+}
+export default Link

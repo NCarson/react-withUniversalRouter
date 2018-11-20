@@ -21,7 +21,9 @@ class App extends React.Component {
 
     render()  {return(
         <div className='app-wrapper'>
-            <Demo title='withUniveralRouter Demo' source={router_code} ><RouterDemo /></Demo>
+            <Demo title='withUniveralRouter Demo' source={router_code} >
+                <RouterDemo />
+            </Demo>
         </div>
     )}
 }

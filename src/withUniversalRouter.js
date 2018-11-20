@@ -14,6 +14,13 @@ function getDisplayName(WrappedComponent) {
 
 const withUniversalRouter = (WrappedComponent, routes, config={}) => {
 
+    // debug messages
+    config.deubg = config.debug || false
+    // where to to log in debug mode
+    config.console = config.console || console
+    // sets window.location for redirect 
+    config.hard_404_path  = config.hard_404_path || null
+
     class WithUniversalRouter extends React.Component {
 
         _initialState() {
@@ -23,68 +30,93 @@ const withUniversalRouter = (WrappedComponent, routes, config={}) => {
         }
 
         constructor(props) {
+            
             super(props)
-            config.debug && console.log('WithUniversalRouter: constructor()')
+            config.debug && config.console.log('WithUniversalRouter: constructor()')
             this.state = this._initialState()
 
-            // XXX Location _needs_ to be a _class_
-            this._router = new UniversalRouter(routes.map(Location => {
-                if (!Location.component)
-                    throw(`${Location}.component should be a React element`)
-                if (!Location.route)
-                    throw(`${Location}.route should be string representing a route`)
+            // XXX location_class _needs_ to be a _class_
+            this._router = new UniversalRouter(routes.map(route => {
+                const loc = route.location_class
+                if (!loc) {
+                    console.warn('Route:', route)
+                    throw(`Route.location_class should be a class, not ${route.location_class}`)
+                }
+                if (!loc.route) {
+                    console.warn('Location:', loc)
+                    throw(`lcoation_class.route should be string representing a route, not ${loc.route}`)
+                }
+                //dont check for compoenent if were just a redirect
+                if (!loc.redirect && !route.component) {
+                    console.warn('Location:', route)
+                    throw(`route.component should be a React element, not ${route.component}`)
+                }
+
                 return {
-                    path: Location.route, 
-                    action: (ctx) => {console.log('ctx', ctx); return new Location(ctx.href)},
+                    path: loc.route, 
+                    action: (ctx) => {return new loc(route.component, ctx.href, config)},
                 }
             }))
-            console.debug('state eq', this.state == this._initialState(), this.state === this._initialState())
         }
 
         componentDidMount() {
-            config.debug && console.log('WithUniversalRouter: compoenentDidMount()')
+            config.debug && config.console.log('WithUniversalRouter: compoenentDidMount()')
             this._unlisten = history.listen(this._setHistory.bind(this))
-            this._setHistory(window.location.href) // first set is window location
+            const href = window.location.href
+            this._setHistory(href) // first set is window location
         }
 
-        componentDidUpdate(newprops, newstate) {
-            config.debug && console.log('WithUniversalRouter: componentDidUpdate()')
-            console.log(this.state, newstate)
+        componentDidUpdate() {
+            config.debug && config.console.log('WithUniversalRouter: componentDidUpdate()')
         }
 
         _setHistory(hlocation) { // history type location
             var uri = new URI(hlocation)
             uri.pathname(hlocation.pathname)
-            uri.search(hlocation.search)
+            // init hlocation is just a string
+            if (typeof hlocation.search === 'string')
+                uri.search(hlocation.search)
             //XXX config below is tied into UniversalRouter config in the constructor
-            const config = {
+            const url_config = {
                 pathname: uri.pathname(), 
                 href: uri.normalize().toString()
             }
-            console.log('href', config.href, config.pathname)
-            this._router.resolve(config)
+            this._router.resolve(url_config)
                 .then( ulocation => this._setLocation(ulocation))
+                .catch((error) => {
+                    if (config.hard_404_path) {
+                        console.warn(error)
+                        //window.location = config.hard_404_path
+                    } else  {
+                        throw error
+                    }
+                })
+
         }
 
         _setLocation(ulocation) { // universal location type
-            console.log('set loc', ulocation)
             this.setState({
                 location: ulocation,
             })
         }
 
         render() {
-            config.debug && console.log('WithUniversalRouter: render(),', 'location:', this.state.location)
-            if (!this.state.location)
+            config.debug && config.console.log('WithUniversalRouter: render(),', 'location:', this.state.location)
+            const location = this.state.location
+            if (!location)
                 return null
-            const cls = this.state.location.constructor
-            console.log('cls', cls, cls.component)
-            return ( 
-                <WrappedComponent 
-                    location={this.state.location}
-                    component={cls.component}
-                />
-            )
+            const cls = location.constructor
+            if (cls.redirect) {
+                window.location = cls.redirect
+                return null
+            } else {
+                return ( 
+                    <WrappedComponent 
+                        location={location}
+                        component={location.component}
+                    />
+                )
+            }
         }
     }
     WithUniversalRouter.displayName = `WithUniversalRouter(${getDisplayName(WrappedComponent)})`;
@@ -94,4 +126,3 @@ const withUniversalRouter = (WrappedComponent, routes, config={}) => {
 
 export default withUniversalRouter
 
-export { Link } from './Link'
